@@ -504,9 +504,7 @@
         const width = 1100 - margin.left - margin.right;
         const height = 600 - margin.top - margin.bottom;
         const positionColors = {"PG": "#fc4a1a", "SG": "#f7b733", "SF": "#4ecdc4", "PF": "#45b7d1", "C": "#96ceb4"};
-        const avgInterpolator = d3.scaleLinear()
-            .domain(leagueAverageData.map(d => d.Year))
-            .range(leagueAverageData.map(d => d.Avg3PA));
+        let avgInterpolator;
         
         // --- FUNCTION DEFINITIONS ---
         
@@ -1276,6 +1274,9 @@
 
         function createYearPulse() {
             if (!isPlaying) return;
+            const playersInYear = playerData.filter(d => d.Year === currentYear);
+            const max3PA = d3.max(playersInYear, d => d["3PA"]);
+            const targetY = (max3PA !== undefined) ? yScale(max3PA) : height;
             const yearX = xScale(currentYear);
             g.insert("line", ".player-dot")
                 .attr("class", "year-pulse")
@@ -1288,7 +1289,7 @@
                 .style("opacity", 0.6)
                 .transition()
                 .duration(playbackSpeed)
-                .attr("y2", 0)
+                .attr("y2", targetY)
                 .style("opacity", 0)
                 .remove();
         }
@@ -1375,6 +1376,10 @@
                 
                 leagueAverageData = Array.from(yearlyAvg, ([year, avg]) => ({ Year: year, Avg3PA: avg }))
                     .sort((a, b) => a.Year - b.Year);
+
+                avgInterpolator = d3.scaleLinear()
+                    .domain(leagueAverageData.map(d => d.Year))
+                    .range(leagueAverageData.map(d => d.Avg3PA));
 
                 initializeVisualization();
                 updateNavigation();
