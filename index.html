@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBA Player Evolution: The Rise of the Three-Point Specialist</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1d2b4a 0%, #0c1324 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .title {
+            text-align: center;
+            font-size: 2.8em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #f7b733;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.6);
+        }
+        
+        .subtitle {
+            text-align: center;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            color: #e0e0e0;
+        }
+        
+        .scene-container {
+            position: relative;
+            min-height: 700px;
+        }
+
+        .era-shade {
+            fill: rgba(247, 183, 51, 0.05);
+            stroke: rgba(247, 183, 51, 0.5);
+            stroke-width: 1.5px;
+            stroke-dasharray: 4, 4;
+            opacity: 0;
+        }
+
+        .era-shade-interactive {
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+        .era-shade-interactive:hover {
+            opacity: 0.7 !important;
+        }
+
+        .heatmap-cell {
+            transition: fill 0.5s ease;
+        }
+
+        .heatmap-toggle {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(45deg, #fc4a1a, #f7b733);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .annotation-group {
+            z-index: 900;
+            position: relative;
+        }
+
+        .year-marker {
+            fill: none;
+            stroke: #f7b733;
+            stroke-width: 2px;
+            stroke-dasharray: 5,5;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .density-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .spotlight {
+            fill: url(#spotlight-gradient);
+            pointer-events: none;
+            transition: all 0.2s ease-out;
+        }
+
+        .career-arc-path {
+            fill: none;
+            stroke-width: 2.5px;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+            pointer-events: none;
+        }
+
+        .career-arc-dot {
+            stroke-width: 2px;
+            pointer-events: none;
+        }
+
+        .legend-item {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-left: -8px;
+        }
+        .legend-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .legend-item.selected {
+            background-color: rgba(247, 183, 51, 0.2);
+            font-weight: bold;
+        }
+        
+        .annotation-group.spotlight-highlight {
+            transition: filter 0.3s ease;
+            filter: drop-shadow(0 0 8px var(--primary-gold));
+        }
+        
+        .navigation {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .line-label {
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+        }
+        
+        .nav-btn {
+            background: linear-gradient(45deg, #fc4a1a, #f7b733);
+            border: none;
+            color: white;
+            padding: 12px 25px;
+            margin: 0 10px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(252, 74, 26, 0.3);
+        }
+        
+        .nav-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(252, 74, 26, 0.4);
+        }
+        
+        .nav-btn:disabled {
+            background: #555;
+            color: #999;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .chart-title {
+            text-align: center;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #f7b733;
+        }
+
+        .scene-description {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 10px;
+            max-width: 600px;
+            text-align: center;
+            font-size: 1.1em;
+            color: #e0e0e0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            z-index: 500;
+        }
+        
+        .axis-label {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #ccc;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(12, 19, 36, 0.9);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: none;
+            border: 1px solid #f7b733;
+            max-width: 220px;
+            z-index: 1000;
+            line-height: 1.5;
+            transition: opacity 0.2s ease, top 0.1s ease, left 0.1s ease;
+        }
+        
+        .tooltip strong {
+            color: #f7b733;
+        }
+        
+        .tooltip hr {
+            border-color: rgba(255, 255, 255, 0.2);
+            margin: 5px 0;
+            border-style: solid;
+            border-width: 1px 0 0 0;
+        }
+
+        .exploration-hint {
+            position: absolute; 
+            bottom: 10px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            text-align: center;
+            font-style: italic;
+            color: #f7b733;
+            font-size: 1em;
+            background: rgba(0, 0, 0, 0.7); 
+            padding: 8px 16px;
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); 
+            z-index: 999; 
+        }
+        
+        .player-dot {
+            transition: all 0.3s ease-out;
+            stroke-width: 0;
+        }
+
+        .player-dot.highlighted {
+            stroke: #ff4848; 
+            stroke-width: 4px;
+            opacity: 1 !important;
+        }
+
+        .player-dot.faded {
+            opacity: 0.15 !important;
+        }
+        
+        .grid line, .grid path {
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-dasharray: 2,2;
+        }
+        
+        .progress-indicator {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .progress-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            margin: 0 5px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .progress-dot.active {
+            background: #f7b733;
+            transform: scale(1.3);
+        }
+        
+        .legend {
+            position: absolute;
+            top: 0px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 800;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .legend-color, .legend-line {
+            width: 15px;
+            height: 15px;
+            margin-right: 8px;
+        }
+        .legend-line {
+             border-top: 3px solid #ff4848;
+        }
+        
+        .axis text {
+            fill: #ccc;
+            font-size: 12px;
+        }
+
+        .axis path, .axis line {
+            stroke: #ccc;
+        }
+
+        .heatmap-layer {
+            filter: blur(1px);
+        }
+
+        .annotation-note-bg {
+            fill: rgba(12, 19, 36, 0.95) !important;
+            fill-opacity: 1 !important;
+            stroke: #f7b733 !important; 
+            stroke-width: 2px !important;
+            rx: 12px;
+            ry: 12px;
+        }
+
+        .annotation-note-label {
+            font-size: 14px !important; 
+            fill: white !important;
+            line-height: 1.4em;
+        }
+        
+        .annotation-note-title {
+            font-size: 17px !important;
+            font-weight: bold !important;
+            fill: #f7b733 !important; 
+            margin-bottom: 5px;
+        }
+        
+        .annotation-connector path, .annotation-subject path {
+            stroke: #f7b733 !important;
+            stroke-width: 2.5px !important;
+        }
+        
+        .annotation-subject circle { 
+            fill: none !important;
+            stroke: #f7b733 !important;
+            stroke-width: 3px !important;
+            animation: pulse-ring 1s infinite alternate;
+        }
+        
+        .league-avg-annotation .annotation-note-label {
+            fill: #ff4848 !important; 
+            font-weight: bold;
+        }
+        
+        .league-avg-annotation .annotation-note-bg {
+            fill: rgba(28, 0, 0, 0.9) !important; 
+            stroke: #ff4848 !important; 
+        }
+
+        .annotation-note {
+            pointer-events: none;
+        }
+        
+        .annotation text {
+            pointer-events: none;
+        }
+
+        .scene-bg-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+        .scene-bg-overlay.active { opacity: 1; }
+        .scene-bg-s1 {
+            background-image: url('data:image/svg+xml;utf8,<svg width="100%" height="100%" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noiseFilter)" opacity="0.03"/></svg>');
+            background-size: cover;
+            filter: grayscale(100%) brightness(120%) contrast(80%);
+        }
+        .scene-bg-s3 {
+            background: radial-gradient(circle at 75% 70%, rgba(252,74,26,0.05) 0%, transparent 40%),
+                        radial-gradient(circle at 25% 30%, rgba(247,183,51,0.05) 0%, transparent 40%);
+            animation: expand-ripple 8s infinite alternate ease-in-out;
+        }
+
+        @keyframes expand-ripple {
+            0% { transform: scale(1); opacity: 0.1; }
+            50% { transform: scale(1.1); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 0.1; }
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 1; stroke-width: 3px; }
+            50% { transform: scale(1.1); opacity: 0.7; stroke-width: 5px; }
+            100% { transform: scale(1); opacity: 1; stroke-width: 3px; }
+        }
+
+        @keyframes ripple-enter {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.3);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .player-dot-entering {
+            animation: ripple-enter 0.6s ease-out;
+        }
+
+        .ripple-ring {
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="sceneBgS1" class="scene-bg-overlay scene-bg-s1"></div>
+        <div id="sceneBgS3" class="scene-bg-overlay scene-bg-s3"></div>
+
+        <h1 class="title">🏀 NBA Player Evolution 🏀</h1>
+        <p class="subtitle">The Rise of the Three-Point Specialist (2003-2022)</p>
+        
+        <div class="progress-indicator">
+            <input type="range" id="yearSlider" min="2003" max="2022" value="2003" style="width: 300px; display: none;">
+            <span id="yearLabel" style="margin-left: 10px; color: #f7b733;"></span>
+        </div>
+        
+        <div class="scene-container" id="visualization"></div>
+        
+        <div class="navigation">
+            <button class="nav-btn" id="prevBtn">← Previous</button>
+            <button class="nav-btn" id="playBtn">▶ Play Timeline</button>
+            <select id="speedControl" style="margin-left: 10px; padding: 8px 15px; border-radius: 20px; background: #333; color: white; border: 1px solid #555; font-size: 14px; cursor: pointer;">
+                <option value="1000">1x Speed</option>
+                <option value="500" selected>2x Speed</option>
+                <option value="250">4x Speed</option>
+                <option value="100">8x Speed</option>
+            </select>
+            <button class="nav-btn" id="nextBtn">Next →</button>
+        </div>
+    </div>
+
+    <script>
+        // --- PARAMETERS ---
+        let currentScene = 0;
+        let highlightedPosition = null;
+        let pinnedPlayer = null;
+        let comparisonPlayers = new Set();
+        let comparisonMode = false;
+        let svg, g, tooltip, xScale, yScale, radiusScale; 
+        let playerData = [];
+        let leagueAverageData = [];
+        let currentYear = 2003;
+        let isPlaying = false;
+        let playbackSpeed = 500;
+        let showEfficiency = false;
+        let ptsThreshold = 0;
+        let showEraComparison = true;
+        let showVolumeLeaders = false;
+        let showHeatmap = false;
+        let heatmapData = null;
+        const efficiencyColorScale = d3.scaleSequential(d3.interpolateRdYlGn).domain([0.25, 0.45]);
+
+        const margin = {top: 40, right: 250, bottom: 60, left: 80};
+        const width = 1100 - margin.left - margin.right;
+        const height = 600 - margin.top - margin.bottom;
+        const positionColors = {"PG": "#fc4a1a", "SG": "#f7b733", "SF": "#4ecdc4", "PF": "#45b7d1", "C": "#96ceb4"};
+        const avgInterpolator = d3.scaleLinear()
+            .domain(leagueAverageData.map(d => d.Year))
+            .range(leagueAverageData.map(d => d.Avg3PA));
+        
+        // --- FUNCTION DEFINITIONS ---
+        
+        function clearSceneElements() {
+            g.selectAll(".player-dot, .annotation-group, path, .line-label").remove(); 
+            d3.selectAll(".legend, .chart-title, .exploration-hint, .scene-description").remove(); 
+            g.selectAll(".player-dot").classed("faded", false);
+        }
+
+        function addSceneTitle(title) {
+            d3.select("#visualization").insert("div", "svg").attr("class", "chart-title").text(title);
+        }
+
+        function addSceneDescription(description) {
+            d3.select("#visualization").insert("div", "svg")
+                .attr("class", "scene-description")
+                .text(description)
+                .transition().duration(500).style("opacity", 1);
+        }
+
+        function addLegend() {
+            const legend = d3.select("#visualization").append("div").attr("class", "legend");
+            legend.append("div").style("font-weight", "bold").text("Player Positions:").style("margin-bottom", "5px");
+            
+            Object.entries(positionColors).forEach(([pos, color]) => {
+                const item = legend.append("div")
+                    .attr("class", "legend-item")
+                    .attr("data-pos", pos)
+                    .on("click", function() {
+                        const clickedPos = d3.select(this).attr("data-pos");
+                        
+                        if (highlightedPosition === clickedPos) {
+                            highlightedPosition = null;
+                        } else {
+                            highlightedPosition = clickedPos;
+                        }
+                        updateDotVisibility();
+                    });
+
+                item.append("div").attr("class", "legend-color").style("background", color);
+                item.append("span").text(pos);
+            });
+
+            legend.append("div").style("font-weight", "bold").text("League Average 3PA:").style("margin-top", "10px");
+            const avgItem = legend.append("div").attr("class", "legend-item").style("cursor", "default").on("click", null);
+            avgItem.append("div").attr("class", "legend-line");
+            avgItem.append("span").text("Average Attempts");
+            legend.append("div").style("font-weight", "bold").text("Circle Size:").style("margin-top", "10px");
+            legend.append("div").attr("class", "legend-item").text("Points Per Game").style("cursor", "default").on("click", null);
+        }
+        
+        function updateBackgroundEffects(sceneIndex) {
+            d3.select("#sceneBgS1").classed("active", sceneIndex === 0);
+            d3.select("#sceneBgS3").classed("active", sceneIndex === 2);
+        }
+
+    
+        // --- ANNOTATIONS ---
+        function annotationsForScene(sceneIndex) {
+            if (!xScale || !yScale || !radiusScale) {
+                return [];
+            }
+
+            let annotations = [];
+            
+            const addAnnotation = (playerData, note) => {
+                if (playerData) {
+                    annotations.push({ ...note, data: playerData });
+                } else {
+                    console.warn(`Annotation data missing for player: ${note.data.Player}, Year: ${note.data.Year}`);
+                }
+            };
+
+            if (sceneIndex === 0) {
+                const ray = playerData.find(d => d.Player === "Ray Allen" && d.Year === 2003);
+                const avgData = leagueAverageData.find(d => d.Year === 2003);
+                if (ray && avgData) {
+                    addAnnotation(ray, {
+                        note: {
+                            label: `In 2003, Ray Allen was an elite 3-point specialist, attempting ${ray["3PA"]} per game, significantly higher than the league average of ${avgData.Avg3PA.toFixed(1)}.`,
+                            title: "The Rare Specialist",
+                            wrap: 250, align: "left"
+                        },
+                        x: xScale(ray.Year), y: yScale(ray["3PA"]), dy: -80, dx: 100
+                    });
+                }
+            } else if (sceneIndex === 1) {
+                const steph = playerData.find(d => d.Player === "Stephen Curry" && d.Year === 2016);
+                const rashard = playerData.find(d => d.Player === "Rashard Lewis" && d.Year === 2008);
+                const stephAvg = avgInterpolator(2016);
+
+                if (steph) {
+                    addAnnotation(steph, {
+                        note: {
+                            label: `Steph Curry's ${steph["3PA"]} attempts per game were a staggering +${(steph["3PA"] - stephAvg).toFixed(1)} above the league average, proving the immense value of high-volume, high-efficiency 3-point shooting.`,
+                            title: "The Game-Changer Arrives",
+                            wrap: 400, align: "left", padding: 30
+                        },
+                        x: xScale(steph.Year), y: yScale(steph["3PA"]), dy: 130, dx: -80
+                    });
+                }
+                if (rashard) {
+                    addAnnotation(rashard, {
+                         note: {
+                            label: `The "stretch four" concept, seen in players like Rashard Lewis earlier, gained traction, pulling big defenders away from the basket.`,
+                            title: "Evolving Positions",
+                            wrap: 350, align: "left", padding: 30
+                        },
+                        x: xScale(rashard.Year), y: yScale(rashard["3PA"]), dy: -150, dx: -50
+                    });
+                }
+            } else if (sceneIndex === 2) {
+                const harden = playerData.find(d => d.Player === "James Harden" && d.Year === 2019);
+                if (harden) {
+                    addAnnotation(harden, {
+                        note: {
+                            label: `James Harden pushed the limits of volume, leading offenses built almost entirely around the three-pointer and free throws.`,
+                            title: "Peak Volume Scoring", 
+                            wrap: 220, 
+                            align: "left"
+                        },
+                        x: xScale(harden.Year), 
+                        y: yScale(harden["3PA"]), 
+                        dy: 50,
+                        dx: -380
+                    });
+                }
+
+                const kat = playerData.find(d => d.Player === "Karl-Anthony Towns" && d.Year === 2019);
+                if (kat) {
+                     addAnnotation(kat, {
+                        note: {
+                            label: `Now, even centers like Karl-Anthony Towns are expected to be credible threats from deep, fundamentally changing their roles.`,
+                            title: "The Modern Center", wrap: 200, align: "left"
+                        },
+                        x: xScale(kat.Year), 
+                        y: yScale(kat["3PA"]), 
+                        dy: 100, 
+                        dx: 150
+                    });
+                }
+
+                const luka = playerData.find(d => d.Player === "Luka Dončić" && d.Year === 2022);
+                if (luka) {
+                    addAnnotation(luka, {
+                        note: {
+                            label: `Stars across all positions, like Luka Dončić, now integrate the 3-pointer as a primary scoring tool.`,
+                            title: "Widespread Adoption", wrap: 250, align: "left"
+                        },
+                        x: xScale(luka.Year), y: yScale(luka["3PA"]), dy: -80, dx: -280,
+                        connector: { points: [[0, 0], [-50, -30], [-100, -30]] }
+                    });
+                }
+            }
+
+            annotations.forEach(a => {
+                if (a.data) {
+                    a.subject = { radius: radiusScale(a.data.PTS) + 5, radiusPadding: 0 };
+                    a.note.lineType = "horizontal";
+                }
+            });
+
+            return annotations.filter(a => a.data);
+        }
+        
+        function enableInteractivity() {
+            d3.select(".scene-container").append("div").attr("class", "exploration-hint").text("🎯 Hover for stats. Click a player to see their career arc.");
+            
+            const tooltip = d3.select(".tooltip");
+            const avgInterpolator = d3.scaleLinear().domain(leagueAverageData.map(d => d.Year)).range(leagueAverageData.map(d => d.Avg3PA));
+            
+            const spotlight = g.select(".spotlight");
+            svg.on("mousemove", function(event) {
+                const [mouseX, mouseY] = d3.pointer(event, g.node());
+                let closestDot = null;
+                let minDistance = 75;
+
+                g.selectAll(".player-dot:not(.faded)").each(function(d) {
+                    const dot = d3.select(this);
+                    const distance = Math.hypot(dot.attr("cx") - mouseX, dot.attr("cy") - mouseY);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestDot = { node: this, data: d };
+                    }
+                });
+
+                if (closestDot) {
+                    const dot = d3.select(closestDot.node);
+                    spotlight.attr("cx", dot.attr("cx")).attr("cy", dot.attr("cy")).attr("r", 80);
+                } else {
+                    spotlight.attr("cx", mouseX).attr("cy", mouseY).attr("r", 50);
+                }
+            }).on("mouseleave", () => spotlight.attr("r", 0));
+
+
+            g.selectAll(".player-dot")
+                .style("cursor", "pointer")
+                .on("mouseover", function(event, d) {
+                    const el = d3.select(this);
+                    if (!el.classed("highlighted")) {
+                         el.raise().transition().duration(100).attr("r", radiusScale(d.PTS) * 1.4);
+                    }
+                    tooltip.style("opacity", 0.95)
+                        .html(() => {
+                            const delta = d["3PA"] - avgInterpolator(d.Year);
+                            const deltaSign = delta >= 0 ? "+" : "";
+                            const deltaColor = delta >= 0 ? "#4caf50" : "#f44336";
+                            return `<strong>${d.Player}</strong> (${d.Pos})<br/>${d.Year} Season<hr>
+                                    3PA/Game: <strong>${d["3PA"]}</strong><br/>
+                                    vs. League Avg: <strong style="color:${deltaColor};">${deltaSign}${delta.toFixed(1)}</strong><br/>
+                                    PPG: <strong>${d.PTS}</strong>`;
+                        })
+                        .style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(event, d) {
+                    const el = d3.select(this);
+                    if (!el.classed("highlighted")) {
+                        el.transition().duration(200).attr("r", radiusScale(d.PTS));
+                    }
+                    tooltip.style("opacity", 0);
+                })
+                .on("click", function(event, d) {
+                    const isAlreadyPinned = d3.select(this).classed("highlighted");
+                    
+                    g.selectAll(".highlighted").classed("highlighted", false)
+                        .transition().duration(200).attr("r", p => radiusScale(p.PTS));
+                    g.selectAll(".career-arc-path, .career-arc-dot").remove();
+
+                    if (!isAlreadyPinned) {
+                        pinnedPlayer = d.Player;
+                        d3.select(this).classed("highlighted", true)
+                           .raise().transition().duration(100).attr("r", radiusScale(d.PTS) * 1.4);
+                        
+                        const playerHistory = playerData.filter(p => p.Player === pinnedPlayer).sort((a,b) => a.Year - b.Year);
+                        
+                        if (playerHistory.length > 1) {
+                            const arcLine = d3.line().x(p => xScale(p.Year)).y(p => yScale(p["3PA"]));
+                            
+                            g.insert("path", ".player-dot")
+                                .datum(playerHistory)
+                                .attr("class", "career-arc-path")
+                                .attr("stroke", "white")
+                                .attr("d", arcLine)
+                                .call(path => path.attr("stroke-dasharray", path.node().getTotalLength()).attr("stroke-dashoffset", path.node().getTotalLength())
+                                    .transition().duration(1000).ease(d3.easeSin).attr("stroke-dashoffset", 0));
+                            
+                            g.selectAll(".career-arc-dot")
+                                .data(playerHistory)
+                                .enter()
+                                .insert("circle", ".player-dot")
+                                .attr("class", "career-arc-dot")
+                                .attr("cx", p => xScale(p.Year))
+                                .attr("cy", p => yScale(p["3PA"]))
+                                .attr("r", 5)
+                                .attr("fill", "white")
+                                .attr("stroke", "#333")
+                                .style("opacity", 0)
+                                .transition().delay(500).duration(500)
+                                .style("opacity", 1);
+                        }
+                    } else {
+                        pinnedPlayer = null;
+                    }
+                    event.stopPropagation(); 
+                });
+        }
+
+        function disableInteractivity() {
+            d3.select(".exploration-hint").remove();
+            g.selectAll(".player-dot").style("cursor", "default")
+                .on("mouseover", null)
+                .on("mouseout", null)
+                .on("click", null);
+            
+            svg.on("mousemove", null).on("mouseleave", null);
+            g.select(".spotlight").attr("r", 0);
+        }
+        
+        function setupScene() {
+            const scene = scenes[currentScene];
+            const sceneData = playerData.filter(d => d.Year <= scene.yearRange[1] && d.Year >= scene.yearRange[0]);
+            const sceneAvgData = leagueAverageData.filter(d => d.Year <= scene.yearRange[1]);
+            
+            clearSceneElements();
+            addSceneTitle(scene.title);
+            addSceneDescription(scene.description);
+            addLegend();
+            updateBackgroundEffects(currentScene);
+
+            if (scene.interactive) {
+                d3.select("#yearSlider").style("display", "inline-block");
+                d3.select("#yearLabel").style("display", "inline-block");
+                updateYearDisplay();
+                if (d3.select(".heatmap-toggle").empty()) {
+                    d3.select("#visualization")
+                        .append("button")
+                        .attr("class", "heatmap-toggle")
+                        .text("Show Density")
+                        .on("click", toggleHeatmap);
+                }
+            } else {
+                d3.select("#yearSlider").style("display", "none");
+                d3.select("#yearLabel").style("display", "none");
+            }
+
+            if (currentScene > 0 && showEraComparison) {
+                 for (let i = 0; i < currentScene; i++) {
+                    g.insert("rect", ":first-child")
+                        .attr("class", "era-shade")
+                        .attr("x", xScale(scenes[i].yearRange[0] + 0.5))
+                        .attr("y", 0)
+                        .attr("width", xScale(scenes[i].yearRange[1] + 0.5) - xScale(scenes[i].yearRange[0] + 0.5))
+                        .attr("height", height)
+                        .style("opacity", 0.15)
+                        .style("stroke", "none");
+                }
+            }
+            const eraData = scenes.map((s, i) => ({...s, sceneIndex: i}));
+
+            g.selectAll(".era-shade")
+                .data(eraData)
+                .enter()
+                .insert("rect", ":first-child")
+                .attr("class", "era-shade era-shade-interactive")
+                .attr("x", d => xScale(d.era[0]))
+                .attr("y", 0)
+                .attr("width", d => xScale(d.era[1]) - xScale(d.era[0]))
+                .attr("height", height)
+                .style("opacity", d => (d.sceneIndex === currentScene) ? 0.5 : 0.05)
+                .on("click", (event, d) => {
+                    if (d.sceneIndex !== currentScene) {
+                        jumpToScene(d.sceneIndex);
+                    }
+                });
+
+            const avgLine = d3.line().x(d => xScale(d.Year)).y(d => yScale(d.Avg3PA));
+            g.append("path").datum(sceneAvgData).attr("fill", "none").attr("stroke", "#ff4848").attr("stroke-width", 3).attr("d", avgLine)
+                .attr("class", "league-avg-line")
+                .call(path => {
+                    const length = path.node().getTotalLength();
+                    path.attr("stroke-dasharray", length).attr("stroke-dashoffset", length)
+                        .transition().duration(1500).ease(d3.easeSin).attr("stroke-dashoffset", 0);
+                });
+
+            const lastAvgData = sceneAvgData[sceneAvgData.length - 1];
+            g.append("text")
+                .attr("class", "line-label")
+                .attr("x", xScale(lastAvgData.Year) + 10)
+                .attr("y", yScale(lastAvgData.Avg3PA))
+                .attr("dy", ".35em")
+                .style("fill", "#ff4848").style("font-size", "12px").style("font-weight", "bold")
+                .style("opacity", 0).text(`League Average: ${lastAvgData.Avg3PA.toFixed(1)}`)
+                .transition().duration(1000).delay(1500).style("opacity", 1);
+
+            const annotations = annotationsForScene(currentScene);
+            const annotatedPlayers = annotations.map(a => a.data.Player);
+
+            g.selectAll(".player-dot")
+                .data(sceneData, d => d.Player + d.Year)
+                .enter()
+                .append("circle")
+                .attr("class", d => `player-dot pos-${d.Pos}`)
+                .attr("cx", d => xScale(d.Year)).attr("cy", d => yScale(d["3PA"]))
+                .style("fill", d => showEfficiency ? efficiencyColorScale(d['3P%']) : positionColors[d.Pos]).style("opacity", 0).attr("r", 0) 
+                .transition().duration(800).delay((d,i) => i * 15)
+                .attr("r", d => radiusScale(d.PTS)).style("opacity", 0.7);
+            
+            if (scene.interactive) {
+                enableInteractivity();
+            } else {
+                disableInteractivity();
+            }
+
+            const makeAnnotations = d3.annotation().notePadding(15).type(d3.annotationCalloutElbow).annotations(annotations);
+            g.append("g").attr("class", "annotation-group").style("opacity", 0).call(makeAnnotations)
+                .raise()
+                .transition().duration(1000).delay(1200)
+                .style("opacity", 1);
+            
+            updateDotVisibility();
+        }
+
+        const scenes = [
+            { title: "Scene 1: The Era of Specialists (2003-2008)", description: "In the early 2000s, the three-point shot was a tool for specialists; league-wide volume was low.", yearRange: [2002, 2008], era: [2002.5, 2008.5], setup: setupScene, interactive: false },
+            { title: "Scene 2: The Revolution Begins (2009-2016)", description: "This era culminated with Stephen Curry's historic rise, proving the power of high-volume perimeter shooting.", yearRange: [2002, 2016], era: [2008.5, 2016.5], setup: setupScene, interactive: false },
+            { title: "Scene 3: The Three-Point Barrage (2017-Present)", description: "The three-pointer became a fundamental weapon for nearly every player, transforming the league.", yearRange: [2002, 2022], era: [2016.5, 2022.5], setup: setupScene, interactive: true }
+        ];
+
+        // --- INITIALIZATION AND NAVIGATION ---
+        function updateNavigation() {
+            d3.select("#prevBtn").property("disabled", currentScene === 0);
+            d3.select("#nextBtn").property("disabled", currentScene === scenes.length - 1);
+            d3.selectAll(".progress-dot").classed("active", (d, i) => i === currentScene);
+        }
+        
+        function handleKeyDown(event) {
+            if (event.key === "ArrowRight") {
+                jumpToScene(currentScene + 1);
+            } else if (event.key === "ArrowLeft") {
+                jumpToScene(currentScene - 1);
+            } else if (event.key === " ") {
+                togglePlayback();
+            } else if (event.key === "e") {
+                showEfficiency = !showEfficiency;
+                updateDotColors();
+            } else if (event.key === "c") {
+                comparisonMode = !comparisonMode;
+                updateComparisonMode();
+            }
+        }
+
+        function jumpToScene(sceneIndex) {
+            if (sceneIndex < 0 || sceneIndex >= scenes.length) return;
+            currentScene = sceneIndex;
+            currentYear = scenes[currentScene].yearRange[1];
+            updateNavigation();
+            scenes[currentScene].setup();
+        }
+        
+        function navigateScene(direction) {
+            jumpToScene(currentScene + direction);
+        }
+
+        function calculateHeatmapData() {
+            const scene = scenes[currentScene];
+            const startYear = scene.yearRange[0];
+            const endYear = scene.interactive ? currentYear : scene.yearRange[1];
+            const yearBins = d3.range(startYear, endYear + 1, 2);
+            const attemptBins = d3.range(0, 15, 1);
+            
+            heatmapData = [];
+            
+            yearBins.forEach((year, i) => {
+                attemptBins.forEach((attempt, j) => {
+                    const count = playerData.filter(d => 
+                        d.Year >= year && d.Year < Math.min(year + 2, endYear + 1) &&
+                        d["3PA"] >= attempt && d["3PA"] < attempt + 1
+                    ).length;
+                    
+                    heatmapData.push({
+                        yearBin: year,
+                        attemptBin: attempt,
+                        count: count,
+                        x: i,
+                        y: j
+                    });
+                });
+            });
+            
+            return heatmapData;
+        }
+
+        function toggleHeatmap() {
+            showHeatmap = !showHeatmap;
+            
+            if (showHeatmap) {
+                heatmapData = null; 
+                if (!heatmapData) calculateHeatmapData();
+                
+                const colorScale = d3.scaleSequential(d3.interpolateYlOrRd)
+                    .domain([0, d3.max(heatmapData, d => d.count)]);
+                
+                const cellWidth = (xScale(2005) - xScale(2003));
+                const cellHeight = (yScale(0) - yScale(1));
+                
+                const heatmapG = g.insert("g", ".player-dot")
+                    .attr("class", "heatmap-layer")
+                    .style("opacity", 0);
+                
+                heatmapG.selectAll(".heatmap-cell")
+                    .data(heatmapData)
+                    .enter()
+                    .append("rect")
+                    .attr("class", "heatmap-cell")
+                    .attr("x", d => xScale(d.yearBin))
+                    .attr("y", d => yScale(d.attemptBin + 1))
+                    .attr("width", cellWidth)
+                    .attr("height", cellHeight)
+                    .attr("rx", 4)
+                    .attr("ry", 4)
+                    .attr("fill", d => d.count > 0 ? colorScale(d.count) : "transparent")
+                    .style("opacity", 0.6);
+                
+                heatmapG.transition()
+                    .duration(500)
+                    .style("opacity", 1);
+                
+                showDensityLegend(colorScale);
+                
+                g.append("line")
+                    .attr("class", "year-marker")
+                    .attr("x1", xScale(currentYear))
+                    .attr("x2", xScale(currentYear))
+                    .attr("y1", 0)
+                    .attr("y2", height)
+                    .style("opacity", 0.8);
+                
+                d3.select(".heatmap-toggle").text("Hide Density");
+            } else {
+                g.select(".heatmap-layer")
+                    .transition()
+                    .duration(500)
+                    .style("opacity", 0)
+                    .remove();
+                g.select(".year-marker").remove();
+                d3.select(".density-legend").style("display", "none");
+                d3.select(".heatmap-toggle").text("Show Density");
+            }
+        }
+
+        function showDensityLegend(colorScale) {
+            let legend = d3.select(".density-legend");
+            
+            if (legend.empty()) {
+                legend = d3.select("#visualization")
+                    .append("div")
+                    .attr("class", "density-legend");
+            }
+            
+            legend.style("display", "block")
+                .html("<strong>Player Density</strong><br>");
+            
+            const gradientId = "density-gradient";
+            const svg = legend.append("svg")
+                .attr("width", 150)
+                .attr("height", 30);
+            
+            const gradient = svg.append("defs")
+                .append("linearGradient")
+                .attr("id", gradientId);
+            
+            const nStops = 10;
+            const stopData = d3.range(nStops).map(i => ({
+                offset: `${(i / (nStops - 1)) * 100}%`,
+                color: colorScale(i / (nStops - 1) * d3.max(heatmapData, d => d.count))
+            }));
+            
+            gradient.selectAll("stop")
+                .data(stopData)
+                .enter()
+                .append("stop")
+                .attr("offset", d => d.offset)
+                .attr("stop-color", d => d.color);
+            
+            svg.append("rect")
+                .attr("x", 10)
+                .attr("y", 5)
+                .attr("width", 130)
+                .attr("height", 15)
+                .style("fill", `url(#${gradientId})`);
+            
+            legend.append("div")
+                .style("display", "flex")
+                .style("justify-content", "space-between")
+                .style("margin-top", "5px")
+                .html("<small>Low</small><small>High</small>");
+        }
+
+        function updateDotVisibility() {
+            const annotations = annotationsForScene(currentScene);
+            const annotatedPlayers = annotations.map(a => a.data.Player);
+
+            g.selectAll(".player-dot").classed("faded", d => {
+                if (ptsThreshold > 0 && d.PTS < ptsThreshold) return true;
+                if (highlightedPosition) {
+                    return d.Pos !== highlightedPosition;
+                }
+                else {
+                    return d.Player && !annotatedPlayers.includes(d.Player);
+                }
+            });
+
+            d3.selectAll(".legend-item")
+                .classed("selected", function() {
+                    return d3.select(this).attr("data-pos") === highlightedPosition;
+                });
+        }
+
+        function initializeVisualization() {
+            svg = d3.select("#visualization").append("svg").attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).style("overflow", "visible");
+            g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            const defs = svg.append("defs");
+            const radialGradient = defs.append("radialGradient")
+                .attr("id", "spotlight-gradient")
+                .attr("cx", "50%").attr("cy", "50%")
+                .attr("r", "50%");
+            radialGradient.append("stop").attr("offset", "0%").attr("stop-color", "rgba(247, 183, 51, 0.3)");
+            radialGradient.append("stop").attr("offset", "100%").attr("stop-color", "rgba(247, 183, 51, 0)");
+            
+            g.append("circle")
+                .attr("class", "spotlight")
+                .attr("r", 0);
+
+            xScale = d3.scaleLinear().domain([2002, 2023]).range([0, width]);
+            yScale = d3.scaleLinear().domain([0, 14.5]).range([height, 0]);
+            radiusScale = d3.scaleSqrt().domain([10, 40]).range([5, 18]).clamp(true);
+            
+            g.append("g").attr("class", "grid x-grid").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale).tickSize(-height).tickFormat(""));
+            g.append("g").attr("class", "grid y-grid").call(d3.axisLeft(yScale).tickSize(-width).tickFormat(""));
+            g.append("g").attr("class", "axis x-axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale).tickFormat(d3.format("d")));
+            g.append("g").attr("class", "axis y-axis").call(d3.axisLeft(yScale));
+            g.append("text").attr("class", "axis-label").attr("transform", "rotate(-90)").attr("y", -45).attr("x", -(height/2)).style("text-anchor", "middle").text("3-Point Attempts Per Game");
+            g.append("text").attr("class", "axis-label").attr("y", height + 40).attr("x", width/2).style("text-anchor", "middle").text("Season");
+            
+            tooltip = d3.select("body").append("div").attr("class", "tooltip").style("opacity", 0);
+            
+            d3.select("#prevBtn").on("click", () => navigateScene(-1));
+            d3.select("#playBtn").on("click", () => togglePlayback());
+            d3.select("#nextBtn").on("click", () => navigateScene(1));
+            d3.select(".progress-indicator").selectAll(".progress-dot")
+                .data(scenes).enter().append("span")
+                .attr("class", "progress-dot")
+                .on("click", (event, d) => jumpToScene(scenes.indexOf(d)));
+            d3.select("body").on("keydown", handleKeyDown);
+
+            d3.select("#yearSlider").on("input", function() {
+                if (!isPlaying) {
+                    currentYear = +this.value;
+                    updateYearDisplay();
+                    animateToYear();
+                }
+            });
+
+            d3.select("#speedControl").on("change", function() {
+                playbackSpeed = +this.value;
+            });
+        }
+
+        function togglePlayback() {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        }
+
+        function startPlayback() {
+            isPlaying = true;
+            d3.select("#playBtn").text("⏸ Pause Timeline");
+            
+            const scene = scenes[currentScene];
+            currentYear = scene.yearRange[0];
+            
+            const yearInterval = d3.interval(() => {
+                if (currentYear < scene.yearRange[1]) {
+                    currentYear++;
+                    updateYearDisplay();
+                    createYearPulse();
+                    animateToYear();
+                } else {
+                    stopPlayback();
+                }
+            }, playbackSpeed);
+            
+            window.currentInterval = yearInterval;
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            d3.select("#playBtn").text("▶ Play Timeline");
+            if (window.currentInterval) {
+                window.currentInterval.stop();
+            }
+        }
+
+        function updateYearDisplay() {
+            d3.select("#yearLabel")
+                .style("transition", "all 0.3s ease")
+                .text(`Year: ${currentYear}`)
+                .style("transform", "scale(1.1)")
+                .transition()
+                .duration(200)
+                .style("transform", "scale(1)");
+            
+            d3.select("#yearSlider").property("value", currentYear);
+        }
+
+        function updateDotColors() {
+            g.selectAll(".player-dot")
+                .transition()
+                .duration(500)
+                .style("fill", d => showEfficiency ? efficiencyColorScale(d['3P%']) : positionColors[d.Pos]);
+        }
+
+        function updateComparisonMode() {
+            if (comparisonMode) {
+                d3.select(".exploration-hint")
+                    .text("📊 Comparison Mode: Click players to compare. Press 'C' to exit.");
+            } else {
+                d3.select(".exploration-hint")
+                    .text("🎯 Hover for stats. Click a player to see their career arc.");
+                comparisonPlayers.clear();
+                g.selectAll(".comparison-highlight").classed("comparison-highlight", false);
+            }
+        }
+
+        function animateToYear() {
+            const scene = scenes[currentScene];
+            const sceneData = playerData.filter(d => d.Year <= currentYear && d.Year >= scene.yearRange[0]);
+            
+            const dots = g.selectAll(".player-dot").data(sceneData, d => d.Player + d.Year);
+            
+            const entering = dots.enter()
+                .append("circle")
+                .attr("class", d => `player-dot pos-${d.Pos} player-dot-entering`)
+                .attr("cx", d => xScale(d.Year))
+                .attr("cy", d => yScale(d["3PA"]))
+                .style("fill", d => showEfficiency ? efficiencyColorScale(d['3P%']) : positionColors[d.Pos])
+                .attr("r", 0)
+                .style("opacity", 0);
+            
+            entering.each(function(d) {
+                const cx = xScale(d.Year);
+                const cy = yScale(d["3PA"]);
+                const color = showEfficiency ? efficiencyColorScale(d['3P%']) : positionColors[d.Pos];
+                
+                g.insert("circle", ".player-dot")
+                    .attr("class", "ripple-ring")
+                    .attr("cx", cx)
+                    .attr("cy", cy)
+                    .attr("r", radiusScale(d.PTS))
+                    .style("stroke", color)
+                    .style("opacity", 0.8)
+                    .transition()
+                    .duration(600)
+                    .attr("r", radiusScale(d.PTS) * 2.5)
+                    .style("opacity", 0)
+                    .remove();
+            });
+            
+            entering.transition()
+                .duration(300)
+                .attr("r", d => radiusScale(d.PTS))
+                .style("opacity", 0.7)
+                .on("end", function() {
+                    d3.select(this).classed("player-dot-entering", false);
+                });
+            
+            dots.transition()
+                .duration(300)
+                .ease(d3.easeQuadInOut)
+                .attr("cx", d => xScale(d.Year))
+                .attr("cy", d => yScale(d["3PA"]))
+                .attr("r", d => radiusScale(d.PTS));
+            
+            dots.exit()
+                .transition()
+                .duration(300)
+                .ease(d3.easeQuadIn)
+                .attr("r", 0)
+                .style("opacity", 0)
+                .remove();
+                
+            updateDotVisibility();
+
+            if (showHeatmap) {
+                g.select(".year-marker")
+                    .transition()
+                    .duration(300)
+                    .ease(d3.easeLinear)
+                    .attr("x1", xScale(currentYear))
+                    .attr("x2", xScale(currentYear));
+                
+                updateHeatmapForCurrentYear();
+            }
+        }
+
+        function createYearPulse() {
+            if (!isPlaying) return;
+            const yearX = xScale(currentYear);
+            g.insert("line", ".player-dot")
+                .attr("class", "year-pulse")
+                .attr("x1", yearX)
+                .attr("x2", yearX)
+                .attr("y1", height)
+                .attr("y2", height)
+                .style("stroke", "#f7b733")
+                .style("stroke-width", 3)
+                .style("opacity", 0.6)
+                .transition()
+                .duration(playbackSpeed)
+                .attr("y2", 0)
+                .style("opacity", 0)
+                .remove();
+        }
+
+        function updateHeatmapForCurrentYear() {
+            calculateHeatmapData();
+            
+            const colorScale = d3.scaleSequential(d3.interpolateYlOrRd)
+                .domain([0, d3.max(heatmapData, d => d.count)]);
+            
+            const cellWidth = (xScale(2005) - xScale(2003));
+            const cellHeight = (yScale(0) - yScale(1));
+            
+            const cells = g.select(".heatmap-layer")
+                .selectAll(".heatmap-cell")
+                .data(heatmapData, d => `${d.yearBin}-${d.attemptBin}`);
+            
+            cells.transition()
+                .duration(300)
+                .attr("fill", d => d.count > 0 ? colorScale(d.count) : "transparent");
+            
+            cells.enter()
+                .append("rect")
+                .attr("class", "heatmap-cell")
+                .attr("x", d => xScale(d.yearBin))
+                .attr("y", d => yScale(d.attemptBin + 1))
+                .attr("width", cellWidth)
+                .attr("height", cellHeight)
+                .attr("rx", 4)
+                .attr("ry", 4)
+                .attr("fill", d => d.count > 0 ? colorScale(d.count) : "transparent")
+                .style("opacity", 0)
+                .transition()
+                .duration(300)
+                .style("opacity", 0.6);
+            
+            cells.exit()
+                .transition()
+                .duration(300)
+                .style("opacity", 0)
+                .remove();
+        }
+
+        function highlightVolumeLeaders() {
+            if (!showVolumeLeaders) return;
+            const topShooters = d3.group(playerData.filter(d => d.Year === currentYear), d => d.Year);
+            topShooters.forEach((players) => {
+                const top3 = players.sort((a, b) => b['3PA'] - a['3PA']).slice(0, 3);
+                g.selectAll(".player-dot")
+                    .filter(d => top3.includes(d))
+                    .classed("volume-leader", true)
+                    .transition()
+                    .attr("stroke", "#FFD700")
+                    .attr("stroke-width", 3);
+            });
+        }
+
+        async function loadAndInitialize() {
+            try {
+                const allData = await d3.csv('https://raw.githubusercontent.com/rayanw2/NBA-Player-Stats-Narrative-Visualization/main/player_data_03_22.csv');
+
+                allData.forEach(d => {
+                    d.Year = +d.Year;
+                    d.Age = +d.Age;
+                    d['3PA'] = +d['3PA'];
+                    d['3P%'] = +d['3P%'];
+                    d.PTS = +d.PTS;
+                    d.MP = +d.MP;
+                    d.G = +d.G;
+                });
+
+                const featuredPlayers = new Set([
+                    "Ray Allen", "Reggie Miller", "Tim Duncan", "Shaquille O'Neal",
+                    "Rashard Lewis", "LeBron James", "Dwight Howard", "Stephen Curry",
+                    "Kyle Korver", "Ryan Anderson", "Kevin Durant", "Klay Thompson",
+                    "James Harden", "Damian Lillard", "Paul George", "Karl-Anthony Towns",
+                    "Trae Young", "Luka Dončić", "Nikola Jokic"
+                ]);
+                
+                playerData = allData.filter(d => featuredPlayers.has(d.Player));
+
+                const validPlayersForAvg = allData.filter(d => d.G > 20 && d.MP > 15);
+                const yearlyAvg = d3.rollup(validPlayersForAvg, v => d3.mean(v, d => d['3PA']), d => d.Year);
+                
+                leagueAverageData = Array.from(yearlyAvg, ([year, avg]) => ({ Year: year, Avg3PA: avg }))
+                    .sort((a, b) => a.Year - b.Year);
+
+                initializeVisualization();
+                updateNavigation();
+                scenes[currentScene].setup();
+            } catch (error) {
+                 console.error("Error loading or processing data:", error);
+                 d3.select("#visualization").append("div").style("color", "red").style("text-align", "center")
+                    .html(`<h2>Failed to Load NBA Player Data</h2><p>Please check the browser console for details.</p>`);
+            }
+         }
+
+         document.addEventListener("DOMContentLoaded", loadAndInitialize);
+    </script>
+</body>
+</html>
